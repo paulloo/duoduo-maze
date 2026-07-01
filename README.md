@@ -70,12 +70,13 @@ pnpm build
 1. 安装依赖
 2. TypeScript 编译
 3. Vite 构建
-4. 发布 `dist/` 到 GitHub Pages
+4. 发布 `dist/` 到 `gh-pages` 分支
 
 如果是第一次启用 Pages，需要在 GitHub 仓库设置里确认：
 
 - `Settings` -> `Pages`
-- `Build and deployment` -> `Source` 选择 `GitHub Actions`
+- `Build and deployment` -> `Source` 选择 `Deploy from a branch`
+- `Branch` 选择 `gh-pages` / `/root`
 
 ## 技术栈
 
@@ -97,3 +98,4 @@ src/
   App.tsx           应用主入口
   styles.css        全局样式和响应式布局
 ```
+
