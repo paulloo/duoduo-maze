@@ -1,6 +1,7 @@
 ﻿import {
   Color3,
   Color4,
+  DynamicTexture,
   Engine,
   FreeCamera,
   HemisphericLight,
@@ -10,7 +11,7 @@
   StandardMaterial,
   Vector3,
 } from "@babylonjs/core";
-import type { ControlAction, ControlMode, LookDelta, MazeData, MoveVector, PlayerPose } from "../types/maze";
+import type { ControlAction, ControlMode, LearningItem, LearningItemStatus, LookDelta, MazeData, MoveVector, PlayerPose } from "../types/maze";
 import { canOccupy, cellToWorld, findCell, worldToCell } from "./mazeMath";
 
 export interface MazeSceneApi {
@@ -21,6 +22,8 @@ export interface MazeSceneApi {
   setTouchInput: (input: Record<ControlAction, boolean>) => void;
   setMoveVector: (vector: MoveVector) => void;
   addLookDelta: (delta: LookDelta) => void;
+  setLearningState: (items: LearningItem[], progress: Record<string, LearningItemStatus>) => void;
+  setFinishGate: (canFinish: boolean, neededCards: number) => void;
 }
 
 interface CreateMazeSceneOptions {
@@ -28,7 +31,13 @@ interface CreateMazeSceneOptions {
   maze: MazeData;
   controlMode: ControlMode;
   mouseLookEnabled: boolean;
+  learningItems: LearningItem[];
+  learningProgress: Record<string, LearningItemStatus>;
+  canFinishLesson: boolean;
+  neededCorrectCards: number;
   onPlayerMove: (pose: PlayerPose) => void;
+  onLearningItemEncounter: (item: LearningItem) => void;
+  onBlockedFinish: (neededCards: number) => void;
   onWin: (elapsedSeconds: number) => void;
 }
 
@@ -45,7 +54,13 @@ export function createMazeScene({
   maze,
   controlMode,
   mouseLookEnabled,
+  learningItems,
+  learningProgress,
+  canFinishLesson,
+  neededCorrectCards,
   onPlayerMove,
+  onLearningItemEncounter,
+  onBlockedFinish,
   onWin,
 }: CreateMazeSceneOptions): MazeSceneApi {
   const engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
@@ -70,6 +85,13 @@ export function createMazeScene({
   let pointerLocked = false;
   let mouseLook = mouseLookEnabled;
   let lastPoseKey = "";
+  let activeLearningItems = learningItems;
+  let activeLearningProgress = learningProgress;
+  let finishAllowed = canFinishLesson;
+  let missingCards = neededCorrectCards;
+  let lastLearningCellKey = "";
+  let lastBlockedFinishKey = "";
+  const learningTokenMeshes = new Map<string, Mesh>();
 
   new HemisphericLight("main-light", new Vector3(0.2, 1, 0.35), scene).intensity = 0.92;
 
@@ -151,6 +173,7 @@ export function createMazeScene({
   });
 
   createFinishFlag(scene, endPosition);
+  createLearningTokens(activeLearningItems);
   notifyPlayerMove(true);
 
   function reset(): void {
@@ -158,6 +181,8 @@ export function createMazeScene({
     camera.rotation = new Vector3(0, Math.PI, 0);
     finished = false;
     startedAt = performance.now();
+    lastLearningCellKey = "";
+    lastBlockedFinishKey = "";
     notifyPlayerMove(true);
   }
 
@@ -194,6 +219,18 @@ export function createMazeScene({
 
     rotateLook(delta.x, delta.y, TOUCH_LOOK_SENSITIVITY);
   }
+
+  function setLearningState(items: LearningItem[], progress: Record<string, LearningItemStatus>): void {
+    activeLearningItems = items;
+    activeLearningProgress = progress;
+    syncLearningTokens();
+  }
+
+  function setFinishGate(canFinish: boolean, neededCards: number): void {
+    finishAllowed = canFinish;
+    missingCards = neededCards;
+  }
+
   function movePlayer(deltaSeconds: number): void {
     if (mode === "child") {
       movePlayerChild(deltaSeconds);
@@ -202,9 +239,19 @@ export function createMazeScene({
     }
 
     const currentCell = worldToCell(maze, camera.position);
+    handleLearningEncounter(currentCell);
+
     if (!finished && currentCell.row === endCell.row && currentCell.col === endCell.col) {
-      finished = true;
-      onWin((performance.now() - startedAt) / 1000);
+      if (finishAllowed) {
+        finished = true;
+        onWin((performance.now() - startedAt) / 1000);
+      } else {
+        const blockedKey = `${currentCell.row}:${currentCell.col}:${missingCards}`;
+        if (blockedKey !== lastBlockedFinishKey) {
+          lastBlockedFinishKey = blockedKey;
+          onBlockedFinish(missingCards);
+        }
+      }
     }
 
     notifyPlayerMove(false);
@@ -295,6 +342,50 @@ export function createMazeScene({
     onPlayerMove({ row: cell.row, col: cell.col, yaw });
   }
 
+  function handleLearningEncounter(cell: { row: number; col: number }): void {
+    const cellKey = `${cell.row}:${cell.col}`;
+    if (cellKey === lastLearningCellKey) {
+      return;
+    }
+
+    lastLearningCellKey = cellKey;
+    const item = activeLearningItems.find((candidate) => candidate.position.row === cell.row && candidate.position.col === cell.col);
+    if (!item || activeLearningProgress[item.id] === "collected") {
+      return;
+    }
+
+    onLearningItemEncounter(item);
+  }
+
+  function createLearningTokens(items: LearningItem[]): void {
+    for (const item of items) {
+      const token = createLearningToken(scene, maze, item);
+      learningTokenMeshes.set(item.id, token);
+    }
+    syncLearningTokens();
+  }
+
+  function syncLearningTokens(): void {
+    const activeIds = new Set(activeLearningItems.map((item) => item.id));
+
+    for (const [id, mesh] of learningTokenMeshes) {
+      if (!activeIds.has(id)) {
+        mesh.dispose();
+        learningTokenMeshes.delete(id);
+      }
+    }
+
+    for (const item of activeLearningItems) {
+      if (!learningTokenMeshes.has(item.id)) {
+        learningTokenMeshes.set(item.id, createLearningToken(scene, maze, item));
+      }
+      const mesh = learningTokenMeshes.get(item.id);
+      if (mesh) {
+        mesh.setEnabled(activeLearningProgress[item.id] !== "collected");
+      }
+    }
+  }
+
   function handleKeyDown(event: KeyboardEvent): void {
     const key = event.key.toLowerCase();
     keys.add(key);
@@ -375,6 +466,8 @@ export function createMazeScene({
     setTouchInput,
     setMoveVector,
     addLookDelta,
+    setLearningState,
+    setFinishGate,
   };
 }
 
@@ -404,6 +497,46 @@ function createFinishFlag(scene: Scene, position: Vector3): Mesh {
   flag.parent = root;
 
   root.position = Vector3.Zero();
+  return root;
+}
+
+function createLearningToken(scene: Scene, maze: MazeData, item: LearningItem): Mesh {
+  const root = new Mesh(`learning-token-${item.id}`, scene);
+  const position = cellToWorld(maze, item.position, 0);
+
+  const pedestalMaterial = new StandardMaterial(`learning-token-pedestal-material-${item.id}`, scene);
+  pedestalMaterial.diffuseColor = item.isCorrect ? new Color3(0.1, 0.62, 0.25) : new Color3(0.42, 0.48, 0.52);
+  pedestalMaterial.emissiveColor = pedestalMaterial.diffuseColor.scale(0.15);
+
+  const pedestal = MeshBuilder.CreateCylinder(
+    `learning-token-pedestal-${item.id}`,
+    { height: 0.18, diameter: maze.cellSize * 0.52, tessellation: 24 },
+    scene,
+  );
+  pedestal.position = new Vector3(position.x, 0.09, position.z);
+  pedestal.material = pedestalMaterial;
+  pedestal.parent = root;
+
+  const texture = new DynamicTexture(`learning-token-texture-${item.id}`, { width: 512, height: 512 }, scene, true);
+  const background = item.isCorrect ? "#238447" : "#6f7d84";
+  texture.drawText(item.displayText, null, 292, "bold 150px Microsoft YaHei, Arial", "#ffffff", background, true, true);
+
+  const cardMaterial = new StandardMaterial(`learning-token-card-material-${item.id}`, scene);
+  cardMaterial.diffuseTexture = texture;
+  cardMaterial.emissiveColor = Color3.White().scale(0.25);
+  cardMaterial.specularColor = Color3.White().scale(0.1);
+  cardMaterial.backFaceCulling = false;
+
+  const card = MeshBuilder.CreatePlane(
+    `learning-token-card-${item.id}`,
+    { width: maze.cellSize * 0.92, height: maze.cellSize * 0.72 },
+    scene,
+  );
+  card.position = new Vector3(position.x, 1.24, position.z);
+  card.billboardMode = Mesh.BILLBOARDMODE_Y;
+  card.material = cardMaterial;
+  card.parent = root;
+
   return root;
 }
 

@@ -1,6 +1,15 @@
-﻿import { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { createMazeScene, type MazeSceneApi } from "../game/createMazeScene";
-import type { ControlAction, ControlMode, LookDelta, MazeData, MoveVector, PlayerPose } from "../types/maze";
+import type {
+  ControlAction,
+  ControlMode,
+  LearningItem,
+  LearningItemStatus,
+  LookDelta,
+  MazeData,
+  MoveVector,
+  PlayerPose,
+} from "../types/maze";
 
 interface MazeCanvasProps {
   maze: MazeData;
@@ -9,8 +18,14 @@ interface MazeCanvasProps {
   touchInput: Record<ControlAction, boolean>;
   moveVector: MoveVector;
   lookDelta: LookDelta | null;
+  learningItems: LearningItem[];
+  learningProgress: Record<string, LearningItemStatus>;
+  canFinishLesson: boolean;
+  neededCorrectCards: number;
   resetToken: number;
   onPlayerMove: (pose: PlayerPose) => void;
+  onLearningItemEncounter: (item: LearningItem) => void;
+  onBlockedFinish: (neededCards: number) => void;
   onWin: (elapsedSeconds: number) => void;
 }
 
@@ -21,12 +36,29 @@ export function MazeCanvas({
   touchInput,
   moveVector,
   lookDelta,
+  learningItems,
+  learningProgress,
+  canFinishLesson,
+  neededCorrectCards,
   resetToken,
   onPlayerMove,
+  onLearningItemEncounter,
+  onBlockedFinish,
   onWin,
 }: MazeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sceneRef = useRef<MazeSceneApi | null>(null);
+  const onPlayerMoveRef = useRef(onPlayerMove);
+  const onLearningItemEncounterRef = useRef(onLearningItemEncounter);
+  const onBlockedFinishRef = useRef(onBlockedFinish);
+  const onWinRef = useRef(onWin);
+
+  useEffect(() => {
+    onPlayerMoveRef.current = onPlayerMove;
+    onLearningItemEncounterRef.current = onLearningItemEncounter;
+    onBlockedFinishRef.current = onBlockedFinish;
+    onWinRef.current = onWin;
+  }, [onBlockedFinish, onLearningItemEncounter, onPlayerMove, onWin]);
 
   useEffect(() => {
     if (!canvasRef.current) {
@@ -38,8 +70,14 @@ export function MazeCanvas({
       maze,
       controlMode,
       mouseLookEnabled,
-      onPlayerMove,
-      onWin,
+      learningItems,
+      learningProgress,
+      canFinishLesson,
+      neededCorrectCards,
+      onPlayerMove: (pose) => onPlayerMoveRef.current(pose),
+      onLearningItemEncounter: (item) => onLearningItemEncounterRef.current(item),
+      onBlockedFinish: (neededCards) => onBlockedFinishRef.current(neededCards),
+      onWin: (elapsedSeconds) => onWinRef.current(elapsedSeconds),
     });
 
     sceneRef.current = api;
@@ -48,7 +86,7 @@ export function MazeCanvas({
       api.dispose();
       sceneRef.current = null;
     };
-  }, [maze, onPlayerMove, onWin]);
+  }, [maze]);
 
   useEffect(() => {
     sceneRef.current?.setControlMode(controlMode);
@@ -71,6 +109,14 @@ export function MazeCanvas({
       sceneRef.current?.addLookDelta(lookDelta);
     }
   }, [lookDelta]);
+
+  useEffect(() => {
+    sceneRef.current?.setLearningState(learningItems, learningProgress);
+  }, [learningItems, learningProgress]);
+
+  useEffect(() => {
+    sceneRef.current?.setFinishGate(canFinishLesson, neededCorrectCards);
+  }, [canFinishLesson, neededCorrectCards]);
 
   useEffect(() => {
     sceneRef.current?.reset();

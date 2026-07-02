@@ -1,12 +1,14 @@
-﻿import type { ControlAction, MazeData, PlayerPose } from "../types/maze";
+import type { ControlAction, LearningItem, LearningItemStatus, MazeData, PlayerPose } from "../types/maze";
 
 interface ChildMazeViewProps {
   maze: MazeData;
   playerPose: PlayerPose | null;
+  learningItems: LearningItem[];
+  learningProgress: Record<string, LearningItemStatus>;
   onMove: (action: ControlAction) => void;
 }
 
-export function ChildMazeView({ maze, playerPose, onMove }: ChildMazeViewProps) {
+export function ChildMazeView({ maze, playerPose, learningItems, learningProgress, onMove }: ChildMazeViewProps) {
   return (
     <div className="child-maze-stage" aria-label="儿童 2D 迷宫">
       <div
@@ -16,6 +18,12 @@ export function ChildMazeView({ maze, playerPose, onMove }: ChildMazeViewProps) 
         {maze.grid.map((row, rowIndex) =>
           row.map((cell, colIndex) => {
             const isPlayer = playerPose?.row === rowIndex && playerPose.col === colIndex;
+            const learningItem = learningItems.find(
+              (item) => item.position.row === rowIndex && item.position.col === colIndex,
+            );
+            const itemStatus = learningItem ? learningProgress[learningItem.id] : null;
+            const shouldShowLearningItem = learningItem && itemStatus !== "collected";
+
             return (
               <button
                 key={`${rowIndex}-${colIndex}`}
@@ -28,6 +36,16 @@ export function ChildMazeView({ maze, playerPose, onMove }: ChildMazeViewProps) 
               >
                 {cell === "start" ? "起" : null}
                 {cell === "end" ? "终" : null}
+                {shouldShowLearningItem ? (
+                  <span
+                    className={`learning-token ${learningItem.isCorrect ? "correct" : "distractor"} ${
+                      itemStatus === "attempted" ? "attempted" : ""
+                    }`}
+                    aria-label={`${learningItem.displayText} 拼音卡`}
+                  >
+                    {learningItem.displayText}
+                  </span>
+                ) : null}
                 {isPlayer ? <span className="child-player" aria-label="当前位置">我</span> : null}
               </button>
             );

@@ -33,10 +33,27 @@ button {
   box-shadow: 0 8px 18px rgba(31, 65, 75, 0.08);
 }
 
+select {
+  min-width: 0;
+  border: 1px solid rgba(29, 45, 49, 0.18);
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: #1d2d31;
+  background: rgba(255, 255, 255, 0.92);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 button:hover,
 button.active {
   background: #ffffff;
   border-color: rgba(40, 112, 117, 0.52);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .app-shell {
@@ -122,6 +139,88 @@ h2 {
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.learning-card {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(40, 112, 117, 0.2);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.course-meta,
+.lesson-picker-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.course-meta {
+  justify-content: space-between;
+  color: #29474b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.learning-target {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  border-color: rgba(35, 132, 71, 0.28);
+  text-align: left;
+  box-shadow: none;
+}
+
+.learning-target span {
+  color: #2b6871;
+  font-size: 12px;
+}
+
+.learning-target strong {
+  font-size: 18px;
+}
+
+.learning-card p {
+  margin: 0;
+  color: #29474b;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.lesson-picker-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.lesson-picker-row button {
+  padding: 8px 9px;
+  font-size: 12px;
+}
+
+.lesson-stars {
+  color: #d88900;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.learning-progress {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(29, 45, 49, 0.12);
+}
+
+.learning-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #238447;
+  transition: width 180ms ease;
 }
 
 .status-row {
@@ -301,6 +400,35 @@ h2 {
   background: #b77609;
 }
 
+.learning-token {
+  position: absolute;
+  inset: 14%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(255, 255, 255, 0.78);
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: clamp(10px, 1.9vw, 17px);
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 5px 12px rgba(20, 55, 64, 0.2);
+}
+
+.learning-token.correct {
+  background: #238447;
+}
+
+.learning-token.distractor {
+  background: #6f7d84;
+}
+
+.learning-token.attempted {
+  color: #2f454a;
+  background: #d7e0df;
+  animation: token-shake 0.3s ease-in-out;
+}
+
 .child-player {
   position: absolute;
   inset: 12%;
@@ -313,6 +441,11 @@ h2 {
   font-size: clamp(10px, 1.8vw, 16px);
   font-weight: 900;
   box-shadow: 0 5px 14px rgba(76, 10, 4, 0.28);
+}
+
+.learning-token + .child-player,
+.child-player {
+  z-index: 2;
 }
 
 .child-inline-controls {
@@ -480,6 +613,33 @@ h2 {
   font-weight: 700;
 }
 
+.win-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.result-stars {
+  margin: 0 0 10px;
+  color: #d88900;
+  font-size: 28px;
+  letter-spacing: 0;
+}
+
+@keyframes token-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+
 @media (hover: none), (pointer: coarse), (max-width: 900px) {
   .app-free .touch-controls {
     display: grid;
@@ -532,7 +692,9 @@ h2 {
   }
 
   .button-row button,
-  .status-row span {
+  .status-row span,
+  .lesson-picker-row button,
+  .lesson-picker-row select {
     padding: 7px 8px;
     font-size: 12px;
   }
